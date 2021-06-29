@@ -10,17 +10,27 @@ const upload = multer(multerConfig)
 locationsRouter.get('/', async (request, response) =>{
 	const { city, uf, items } = request.query
 
-	const parsedItems = <any> String(items).split(',').map(item => Number(item.trim()))
+	if(city && items && uf){ 
+		const parsedItems: Number[] = String(items).split(',').map(item => Number(item.trim()))
 
-	const locations = await knex('locations')
-		.join('locations_items', 'locations.id', '=', 'locations_items.location_id')
-		.where('locations_items.item_id', parsedItems)
-		.where('city', String(city))
-		.where('uf', String(uf))
-		.distinct()
-		.select('locations.*')
+		const locations = await knex('locations')
+			.join('locations_items', 'locations.id', '=', 'locations_items.location_id')
+			.where('locations_items.item_id', parsedItems)
+			.where('city', String(city))
+			.where('uf', String(uf))
+			.distinct()
+			.select('locations.*')
 
-	return response.json(locations)
+		return response.json(locations)
+
+	} else {
+		const locations = await knex('locations').select('*')
+		return response.json(locations)
+
+	}
+
+	
+
 })
 
 locationsRouter.get('/:id', async (request, response) =>{
