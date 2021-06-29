@@ -26,21 +26,31 @@ locationsRouter.post('/', async (request, response) => {
 		uf
 	}
 
-	const newIds = await knex('locations').insert(location)
+	const transaction = await knex.transaction()
 
-	const locationId = newIds[0]
+	const newIds = await transaction('locations').insert(location)
 
-	const locationItems = items.map((item_id: number) => {
+	const location_id = newIds[0]
+
+	const locationItems = items.map(async (item_id: number) => {
+		const selectedItem = await transaction('items').where('id', item_id).first()
+
+		if(!selectedItem) {
+			return response.status(400).json({message: 'Item not found'})
+		}
+
 		return {
 			item_id,
-			location_id: locationId
+			location_id
 		}
 	})
 
-	await knex('locations_items').insert(locationItems)
+	await transaction('locations_items').insert(locationItems)
+
+	await transaction.commit()
 
 	return response.json({
-		id: locationId,
+		id: location_id,
 		...location
 	})
 })
