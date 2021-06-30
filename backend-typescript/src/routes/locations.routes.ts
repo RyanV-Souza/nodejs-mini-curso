@@ -1,11 +1,41 @@
 import {Router} from 'express'
 import multer from 'multer'
+import {celebrate, Joi} from 'celebrate'
 import knex  from '../database/connection'
 import multerConfig from '../config/multer'
+import { Knex } from 'knex'
 
 const locationsRouter = Router()
 
 const upload = multer(multerConfig)
+
+const defaultRules = {
+	body: Joi.object().keys({
+		name: Joi.string().required(),
+		email: Joi.string().required().email().label('e-mail'),
+		whatsapp: Joi.string().required(),
+		latitude: Joi.number().required(),
+		longitude: Joi.number().required(),
+		city: Joi.string().required(),
+		uf: Joi.string().required().max(2).min(1).messages({
+			'string.base': `"uf" should be a type of 'text'`,
+            'string.empty': `"uf" cannot be an empty field`,
+            'string.min': `"uf" should have a minimum length of {#limit}`,
+            'string.max': `"uf" should have a maximum length of {#limit}`,
+            'any.required': `"uf" is a required field`
+		}),
+		items: Joi.array().items(Joi.number()).required()
+
+
+	})
+}
+
+const joiOptions = {
+	abortEarly: false,
+	errors: {
+		escapeHtml: true
+	}
+}
 
 locationsRouter.get('/', async (request, response) =>{
 	const { city, uf, items } = request.query
@@ -32,7 +62,7 @@ locationsRouter.get('/', async (request, response) =>{
 					this.where({uf: String(uf)})
 				}
 			})
-			
+
 			.distinct()
 			.select('locations.*')
 
@@ -65,7 +95,7 @@ locationsRouter.get('/:id', async (request, response) =>{
 	return response.json({location, items})
 })
 
-locationsRouter.post('/', async (request, response) => {
+locationsRouter.post('/', celebrate(defaultRules, joiOptions), async (request, response) => {
 	const {
 		name,
 		email,
@@ -77,9 +107,9 @@ locationsRouter.post('/', async (request, response) => {
 		items
 	} = request.body
 
-	const location = {
-		image: 'fake-image.jpg',
-		name,
+	const location: object = {
+		image: 'fake.jpg',
+		name,	
 		email,
 		whatsapp,
 		latitude,
@@ -90,24 +120,35 @@ locationsRouter.post('/', async (request, response) => {
 
 	const transaction = await knex.transaction()
 
-	const newIds = await transaction('locations').insert(location)
+	const newIds: Array<number> = await transaction('locations').insert(location)
 
-	const location_id = newIds[0]
+	const location_id: number = newIds[0]
 
-	const locationItems = items.map(async (item_id: number) => {
-		const selectedItem = await transaction('items').where('id', item_id).first()
+	if(items?.length){
+		let itemNotFound: number|undefined = undefined
 
-		if(!selectedItem) {
-			return response.status(400).json({message: 'Item not found'})
+		const itemsBd = await transaction('items').select('id')
+
+		const itemsIdBd: Array<number> = itemsBd.map(item => {
+			return item.id
+		})
+
+		if(itemNotFound){
+			transaction.rollback()
+			return response.status(400).json({message: `Item ${itemNotFound} not found`})
 		}
 
-		return {
-			item_id,
-			location_id
-		}
-	})
+		const locationItems = items.map((item_id: number) => {
+			return {
+				item_id,
+				location_id
+			}
+		})
 
-	await transaction('locations_items').insert(locationItems)
+		await transaction('locations_items').insert(locationItems)
+
+	}
+
 
 	await transaction.commit()
 
