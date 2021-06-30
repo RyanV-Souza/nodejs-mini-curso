@@ -15,9 +15,24 @@ locationsRouter.get('/', async (request, response) =>{
 
 		const locations = await knex('locations')
 			.join('locations_items', 'locations.id', '=', 'locations_items.location_id')
-			.where('locations_items.item_id', parsedItems)
-			.where('city', String(city))
-			.where('uf', String(uf))
+			.where(function() {
+				if (items) {
+					this.whereIn('locations_items.item_id', parsedItems)
+				}
+			})
+			.where(function() {
+				if(city && uf){
+					this.where({
+						city: String(city),
+						uf: String(uf)
+					})
+				} else if (city && !uf){
+					this.where({ city: String(city)})
+				} else if (!city && uf){
+					this.where({uf: String(uf)})
+				}
+			})
+			
 			.distinct()
 			.select('locations.*')
 
